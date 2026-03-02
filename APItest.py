@@ -2,7 +2,6 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
-# 加载 .env 文件中的环境变量
 load_dotenv()
 
 content = "测试，回复1"
