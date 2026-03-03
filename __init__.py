@@ -5,9 +5,11 @@ from mathutils import Vector
 from collections import defaultdict
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 from Function import NodeManager
+from APItest import get_response
 
+
+#实际运行代码
 tree = bpy.context.active_object.active_material.node_tree
 active_node = tree.nodes.active
 

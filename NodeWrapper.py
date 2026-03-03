@@ -1,4 +1,4 @@
-
+#节点包装器，用于包装节点对象，并提供节点相关属性和方法
 class NodeW:
     def __init__(self, node):
         self.node = node
