@@ -1,6 +1,13 @@
 from collections import defaultdict
-from NodeWrapper import NodeW
 
+try:
+    # 作为 Blender 插件包内模块导入
+    from .NodeWrapper import NodeW
+except ImportError:
+    # 作为独立脚本运行时的回退导入
+    from NodeWrapper import NodeW
+
+#节点管理器，用于管理节点之间的关系和布局
 class NodeManager:
     def __init__(self):
         self.node_instances = defaultdict(list)
