@@ -8,107 +8,108 @@ except ImportError:
 
 #节点管理器，用于管理节点之间的关系和布局
 class NodeManager:
-    def __init__(self):
+    def __init__(self, tree):
         self.node_instances = defaultdict(list)
         self.depth_groups = defaultdict(list)
         self.margin = 40
+        self.tree = tree
 
-    def loop_in_links(self,loop_node):
+    def loop_in_links(self, loop_node):
 
         if isinstance(loop_node, bpy.types.Node):
-            n=loop_node
-        elif isinstance(loop_node,NodeW):
-            n=loop_node.node
+            n = loop_node
+        elif isinstance(loop_node, NodeW):
+            n = loop_node.node
         else:
             return
 
         for input in n.inputs:
             for link in input.links:
                 yield link
-    def loop_out_links(self,loop_node):
-        
+
+    def loop_out_links(self, loop_node):
+
         if isinstance(loop_node, bpy.types.Node):
-            n=loop_node
-        elif isinstance(loop_node,NodeW):
-            n=loop_node.node
+            n = loop_node
+        elif isinstance(loop_node, NodeW):
+            n = loop_node.node
         else:
             return
 
         for output in n.outputs:
             for link in output.links:
                 yield link
+
     def get_wrapper(self, node):
         ptr = node.as_pointer()
         if ptr not in self.node_instances:
             self.node_instances[ptr] = NodeW(node)
         return self.node_instances[ptr]
-    def link_socket(self, s1, s2):
-        return
-    def check_type(self,fnode,link):
-        # 检查前一个节点是否为特殊节点类型（REROUTE）
-        real_fnode=fnode
-        curr_link=link
-        socket_in=link.to_socket
-        while real_fnode.type == "REROUTE":
 
-            if not real_fnode.inputs[0].links:#若转接点前面无节点连接，移除转接点并且返回空值
+    def LinkSocket(self, s1, s2):
+        self.tree.links.new(s1, s2)
+        return
+
+    def check_type(self, fnode, link):
+        # 检查前一个节点是否为特殊节点类型（REROUTE）
+        real_fnode = fnode
+        to_socket = link.to_socket
+        while real_fnode.type == "REROUTE":
+            if not real_fnode.inputs[0].links:  # 若转接点前面无节点连接，移除转接点并且返回空值
                 real_fnode.id_data.nodes.remove(real_fnode)
                 return None
 
-            #若有节点连接则融并该转接点
-            socket_out=real_fnode.inputs[0].links[0].from_socket
-            old_fnode=real_fnode
-            real_fnode=real_fnode.inputs[0].links[0].from_node
-            self.link_socket(socket_out, socket_in)
-            old_fnode.id_data.nodes.remove(real_fnode)
+            # 若有节点连接则融并该转接点
+            link0 = real_fnode.inputs[0].links[0]
+            from_node = link0.from_node
+            from_socket = link0.from_socket
+            self.LinkSocket(from_socket, to_socket)
 
-            # link1=curr_link
-            # link2=real_fnode.inputs[0].links[0]
-            # real_fnode = real_fnode.inputs[0].links[0].from_node
-            # extra_node=link1.from_node
-            #
-            # self.relink_socket(link1.to_socket,link2.from_socket)
-            # extra_node.id_data.nodes.remove(extra_node) # 同样可以选择不删除，等到最后统一删除多余节点
+            old_fnode = real_fnode
+            old_fnode.id_data.nodes.remove(old_fnode)
+
+            real_fnode = from_node
 
         return real_fnode
 
     def initialize_hierarchy(self, node):
 
         curr_w = self.get_wrapper(node)
-        #检查是否已经深度遍历
+        # 检查是否已经深度遍历
         if hasattr(curr_w, "_init_flag"):
             curr_w.out_links_count += 1
             return curr_w
         curr_w._init_flag = True
-        curr_w.out_links_count = 1 
-        
+        curr_w.out_links_count = 1
+
         for link in self.loop_in_links(curr_w):
-            from_nodes=self.check_type(link.from_node,link)
+            from_nodes = self.check_type(link.from_node, link)
             if from_nodes is None:
                 continue
 
             from_w = self.initialize_hierarchy(from_nodes)
-    
+
             from_w.to_nodes.append(curr_w)
             curr_w.from_nodes.append(from_w)
         return curr_w
+
     def calculate_depth(self, node_w, current_depth):
-        
+
         node_w.depth = max(current_depth, node_w.depth)
         node_w.out_links_count -= 1
-        
+
         if node_w.out_links_count > 0:
             return
-        
+
         self.depth_groups[node_w.depth].append(node_w)
 
         for parent_w in node_w.from_nodes:
             self.calculate_depth(parent_w, node_w.depth + 1)
 
     def set_node_priority(self, depth):
-        
+
         nodes_in_layer = self.depth_groups[depth]
-        
+
         right_node_usage = defaultdict(int)
         for nw in nodes_in_layer:
             for target in nw.to_nodes:
@@ -116,10 +117,10 @@ class NodeManager:
 
         for nw in nodes_in_layer:
 
-            nw.target_y=nw.posW.y
+            nw.target_y = nw.posW.y
             if nw.to_nodes:
                 for tnw in nw.to_nodes:
-                    if nw.depth-tnw.depth==1:
+                    if nw.depth - tnw.depth == 1:
                         nw.next_layer_nodes.append(tnw)
                 nw.target_y = sum(t.posW.y for t in nw.next_layer_nodes) / len(nw.next_layer_nodes)
 
@@ -128,46 +129,51 @@ class NodeManager:
             if num_targets == 1:
                 target_ptr = nw.to_nodes[0].as_pointer()
                 if right_node_usage[target_ptr] == 1:
-                    nw.priority = 0 
+                    nw.priority = 0
                 else:
-                    nw.priority = 1 
+                    nw.priority = 1
             else:
-                nw.priority = 2 
-    def occupied_handler(self,y,height,areas):
+                nw.priority = 2
+
+    def occupied_handler(self, y, height, areas):
         if not areas:
             areas.append([y, y - height])
             return y
 
-        find_right_pos=False
-        while(not find_right_pos):
+        find_right_pos = False
+        while (not find_right_pos):
 
             for area in areas:
-                if y>area[1] and y-height<area[0]:
-                    y=area[1]+self.margin
+                if y > area[1] and y - height < area[0]:
+                    y = area[1] + self.margin
                     continue
 
-            find_right_pos=True
+            find_right_pos = True
 
-        areas.append([y,y-height])
+        areas.append([y, y - height])
         return y
-        
+
     def apply_layout(self, root_w):
-        
+
         sorted_depths = sorted(self.depth_groups.keys())
-        
+
         for d in sorted_depths:
             layer_nodes = self.depth_groups[d]
             self.set_node_priority(d)
-            
+
             layer_nodes.sort(key=lambda x: (x.priority, abs(x.target_y - root_w.posW.y)))
-            
+
             occupied_areas = []
-            
+
             for nw in layer_nodes:
                 if nw.next_layer_nodes:
-                    nw.posW.x = nw.next_layer_nodes[0].posW.x - nw.width*(1-1/6) 
-                nw_height=nw.node.dimensions.y
+                    try:
+                        base_x_bias = min(nodeW.posW.x for nodeW in self.depth_groups[d-1])
+                        nw.posW.x = base_x_bias - nw.width * (1 - 1 / 6)
+                    except ValueError:
+                        pass
+                nw_height = nw.node.dimensions.y
 
-                nw.posW.y=self.occupied_handler(nw.target_y,nw_height,occupied_areas)
+                nw.posW.y = self.occupied_handler(nw.target_y, nw_height, occupied_areas)
 
-                nw.SetWorldPos(nw.posW.x,nw.posW.y)
+                nw.SetWorldPos(nw.posW.x, nw.posW.y)

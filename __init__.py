@@ -35,7 +35,7 @@ class NODEMANAGER_OT_auto_layout(bpy.types.Operator):
             self.report({"ERROR"}, "请选择活动节点")
             return {"CANCELLED"}
 
-        manager = NodeManager()
+        manager = NodeManager(tree)
         root_wrapper = manager.initialize_hierarchy(active_node)
 
         root_wrapper.out_links_count = 0
