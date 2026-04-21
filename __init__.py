@@ -18,18 +18,15 @@ class NODEMANAGER_OT_auto_layout(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
-        obj = context.active_object
-        if obj is None:
-            self.report({"ERROR"}, "没有活动物体")
-            return {"CANCELLED"}
+    
+        tree = context.space_data.edit_tree 
 
-        mat = getattr(obj, "active_material", None)
-        if mat is None or mat.node_tree is None:
+        if tree is None or tree.nodes is None:
             self.report({"ERROR"}, "没有可用的材质节点树")
             return {"CANCELLED"}
 
-        tree = mat.node_tree
         active_node = tree.nodes.active
+
         if active_node is None:
             self.report({"ERROR"}, "请选择活动节点")
             return {"CANCELLED"}
