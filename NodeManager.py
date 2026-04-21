@@ -2,10 +2,8 @@ from collections import defaultdict
 import bpy
 
 try:
-    # 作为 Blender 插件包内模块导入
     from .NodeWrapper import NodeW
 except ImportError:
-    # 作为独立脚本运行时的回退导入
     from NodeWrapper import NodeW
 
 #节点管理器，用于管理节点之间的关系和布局
@@ -44,27 +42,35 @@ class NodeManager:
         if ptr not in self.node_instances:
             self.node_instances[ptr] = NodeW(node)
         return self.node_instances[ptr]
-    def relink_socket(self, s1, s2):
+    def link_socket(self, s1, s2):
         return
-    def check_type(self,fnode,link,if_changed=None):
-        # 检查前一个节点是否为特殊节点类型（REROUTE，GROUP）
-        real_node=fnode
+    def check_type(self,fnode,link):
+        # 检查前一个节点是否为特殊节点类型（REROUTE）
+        real_fnode=fnode
         curr_link=link
-        while real_node.type == "REROUTE":
+        socket_in=link.to_socket
+        while real_fnode.type == "REROUTE":
 
-            if not real_node.inputs[0].links:
-                real_node.id_data.nodes.remove(real_node)
+            if not real_fnode.inputs[0].links:#若转接点前面无节点连接，移除转接点并且返回空值
+                real_fnode.id_data.nodes.remove(real_fnode)
                 return None
 
-            link1=curr_link
-            link2=real_node.inputs[0].links[0]
-            real_node = real_node.inputs[0].links[0].from_node
-            extra_node=link1.from_node
+            #若有节点连接则融并该转接点
+            socket_out=real_fnode.inputs[0].links[0].from_socket
+            old_fnode=real_fnode
+            real_fnode=real_fnode.inputs[0].links[0].from_node
+            self.link_socket(socket_out, socket_in)
+            old_fnode.id_data.nodes.remove(real_fnode)
 
-            self.relink_socket(link1.to_socket,link2.from_socket)
-            extra_node.id_data.nodes.remove(extra_node) # 同样可以选择不删除，等到最后统一删除多余节点
+            # link1=curr_link
+            # link2=real_fnode.inputs[0].links[0]
+            # real_fnode = real_fnode.inputs[0].links[0].from_node
+            # extra_node=link1.from_node
+            #
+            # self.relink_socket(link1.to_socket,link2.from_socket)
+            # extra_node.id_data.nodes.remove(extra_node) # 同样可以选择不删除，等到最后统一删除多余节点
 
-        return real_node
+        return real_fnode
 
     def initialize_hierarchy(self, node):
 

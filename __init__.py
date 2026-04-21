@@ -1,5 +1,9 @@
 import bpy
-from .NodeManager import NodeManager
+
+try:
+    from .NodeManager import NodeManager
+except ImportError:
+    from NodeManager import NodeManager
 
 bl_info = {
     "name": "Node Manager",
