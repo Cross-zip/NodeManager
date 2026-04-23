@@ -11,7 +11,7 @@ class NodeManager:
     def __init__(self, tree):
         self.node_instances = defaultdict(list)
         self.depth_groups = defaultdict(list)
-        self.margin = 40
+        self.margin = 80
         self.tree = tree
         self._virtual_occupied_by_depth = defaultdict(list)
 
@@ -138,6 +138,15 @@ class NodeManager:
         gap = node_w.height / (count + 1)
         return node_w.posW.y - gap * (idx + 1)
 
+    def _layout_height(self, nw: NodeW) -> float:
+        h = float(getattr(nw, "height", 0.0) or 0.0)
+        if h > 1.0:
+            return h
+        # Some Blender node types may report 0 dimensions until UI redraw; use a safe fallback.
+        if getattr(nw.node, "type", "") == "REROUTE":
+            return 20.0
+        return 80.0
+
     def set_node_priority(self, depth):
 
         nodes_in_layer = self.depth_groups[depth]
@@ -219,7 +228,7 @@ class NodeManager:
             )
 
         for nw in layer_nodes:
-            height = float(nw.height)
+            height = self._layout_height(nw)
             ideal_center = float(nw.target_y - height / 2)
             items.append(
                 {
@@ -241,7 +250,9 @@ class NodeManager:
             else 1.0
         )
 
-        for _ in range(10):
+        # More nodes -> more iterations needed to fully resolve overlaps (esp. after anchor pulls).
+        solve_iters = min(60, max(20, len(layer_nodes) * 2))
+        for _ in range(solve_iters):
             items.sort(key=lambda it: it["center"], reverse=True)
 
             for i in range(len(items) - 1):
@@ -275,8 +286,35 @@ class NodeManager:
             for it in items:
                 if it["fixed"]:
                     continue
-                k = 0.25 * (it["weight"] / max_w)
+                # Anchor pull. Keep modest to avoid reintroducing overlaps late in iterations.
+                k = 0.12 * (it["weight"] / max_w)
                 it["center"] += (it["ideal"] - it["center"]) * k
+
+        # Final strict sweep to guarantee no overlaps remain.
+        items.sort(key=lambda it: it["center"], reverse=True)
+        for i in range(len(items) - 1):
+            upper = items[i]
+            lower = items[i + 1]
+            min_sep = (upper["height"] + lower["height"]) / 2 + self.margin
+            dist = upper["center"] - lower["center"]
+            if dist >= min_sep:
+                continue
+
+            delta = (min_sep - dist)
+            if upper["fixed"] and lower["fixed"]:
+                continue
+            if upper["fixed"] and not lower["fixed"]:
+                lower["center"] -= delta
+                continue
+            if lower["fixed"] and not upper["fixed"]:
+                upper["center"] += delta
+                continue
+
+            wu = upper["weight"]
+            wl = lower["weight"]
+            total = wu + wl
+            upper["center"] += delta * (wl / total)
+            lower["center"] -= delta * (wu / total)
 
         for it in items:
             if it["nw"] is None:
@@ -321,7 +359,7 @@ class NodeManager:
                 for i in range(len(centers) - 1):
                     a, ca = centers[i]
                     b, cb = centers[i + 1]
-                    min_sep = (a.height + b.height) / 2 + self.margin
+                    min_sep = (self._layout_height(a) + self._layout_height(b)) / 2 + self.margin
                     dist = ca - cb
                     if dist >= min_sep:
                         continue
