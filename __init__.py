@@ -1,9 +1,9 @@
 import bpy
 
 try:
-    from .NodeManager import NodeManager
+    from .CompactMode import NodeManager
 except ImportError:
-    from NodeManager import NodeManager
+    from CompactMode import NodeManager
 
 bl_info = {
     "name": "Node Manager",
